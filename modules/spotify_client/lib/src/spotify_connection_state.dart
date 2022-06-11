@@ -1,0 +1,3 @@
+enum SpotifyConnectionState { 
+  connected, disconnected
+}

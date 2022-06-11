@@ -1,0 +1,63 @@
+group 'app.iandis.spotify_client'
+version '1.0-SNAPSHOT'
+
+buildscript {
+    ext.kotlin_version = '1.6.10'
+    repositories {
+        google()
+        mavenCentral()
+    }
+
+    dependencies {
+        classpath 'com.android.tools.build:gradle:4.1.3'
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
+    }
+}
+
+rootProject.allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
+apply plugin: 'com.android.library'
+apply plugin: 'kotlin-android'
+android {
+    compileSdkVersion 32
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    kotlinOptions {
+        jvmTarget = '1.8'
+    }
+
+    sourceSets {
+        main.java.srcDirs += 'src/main/kotlin'
+    }
+
+    defaultConfig {
+        minSdkVersion 21
+    }
+}
+
+dependencies {
+    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
+
+    def spotify_android_auth_version = "2.0.2"
+    implementation "com.spotify.android:auth:$spotify_android_auth_version"
+
+    // uncomment this for making changes in the library
+    // implementation files('spotify-app-remote/spotify-app-remote-release-0.7.2.aar')
+    // uncomment this for running an app with this library
+    implementation project(':spotify-app-remote')
+
+    def gson_version = "2.8.9"
+    implementation "com.google.code.gson:gson:$gson_version"
+
+    def rxkotlin_version = "3.0.1"
+    implementation("io.reactivex.rxjava3:rxkotlin:$rxkotlin_version")
+}

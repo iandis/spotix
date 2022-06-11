@@ -1,0 +1,9 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="app.iandis.spotify_client">
+
+    <application>
+       <meta-data android:name="SPOTIFY_CLIENT_ID" />
+       <meta-data android:name="SPOTIFY_REDIRECT_URI" />
+    </application>
+
+</manifest>
