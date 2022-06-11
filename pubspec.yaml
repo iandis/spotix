@@ -7,10 +7,15 @@ version: 1.0.0+1
 
 environment:
   sdk: ">=2.16.2 <3.0.0"
+  flutter: "2.10.5"
 
 dependencies:
+  cached_network_image: 3.2.0
   flutter:
     sdk: flutter
+  provider: 6.0.3
+  spotify_client:
+    path: modules/spotify_client
 
 dev_dependencies:
   flutter_test:
