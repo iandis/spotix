@@ -24,6 +24,10 @@ abstract class AppThemes {
     appBarTheme: const AppBarTheme(
       elevation: 0,
       shadowColor: Colors.transparent,
+      systemOverlayStyle: SystemUiOverlayStyle(
+        statusBarColor: Colors.transparent,
+        statusBarIconBrightness: Brightness.light,
+      ),
     ),
   );
 }
