@@ -44,7 +44,7 @@ class App extends StatelessWidget {
       builder: (_, __) {
         return MaterialApp(
           debugShowCheckedModeBanner: false,
-          restorationScopeId: 'spotix-1.0.0+1',
+          restorationScopeId: 'spotix-1.0.1',
           title: 'Spotix',
           themeMode: context.read<AppThemeController>().themeMode,
           theme: AppThemes.light,
@@ -435,7 +435,7 @@ class _HomePageState extends State<HomePage>
       builder: (_) {
         return const AboutDialog(
           applicationName: 'Spotix',
-          applicationVersion: '1.0.0+1',
+          applicationVersion: '1.0.1',
           applicationLegalese: 'Copyright 2022 Iandi Santulus. '
               'Protected under the BSD 3-Clause "New" or "Revised" License.',
         );
