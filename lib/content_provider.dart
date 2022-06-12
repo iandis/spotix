@@ -1,9 +1,15 @@
+import 'dart:typed_data';
+
 import 'package:flutter/foundation.dart';
+import 'package:quiver/collection.dart';
 import 'package:spotify_client/spotify_client.dart';
 
 enum ContentState { init, loading, loaded }
 
 const SpotifyClient _spotifyClient = SpotifyClient();
+
+final Map<String, Future<Uint8List?>> _cachedImageBytes =
+    LruMap<String, Future<Uint8List?>>(maximumSize: 100);
 
 class ContentProvider extends ChangeNotifier {
   ContentState _sectionState = ContentState.init;
@@ -65,6 +71,11 @@ class ContentProvider extends ChangeNotifier {
     _sectionItems[section] = sectionItems;
 
     _sectionItemsState[section] = ContentState.loaded;
+  }
+
+  Future<Uint8List?> getImageBytes(String imageUri) {
+    return _cachedImageBytes[imageUri] ??=
+        _spotifyClient.getImage(imageUri: imageUri);
   }
 
   void clearItems() {

@@ -1,22 +1,37 @@
 import 'dart:async';
 import 'dart:developer';
-import 'dart:typed_data';
 
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
-import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:spotify_client/spotify_client.dart';
-import 'package:spotix/content_image_extension.dart';
+import 'package:spotix/app_text_styles.dart';
+import 'package:spotix/app_theme_controller.dart';
+import 'package:spotix/app_themes.dart';
+import 'package:spotix/scrollable_text.dart';
 import 'package:spotix/content_provider.dart';
+import 'package:spotix/offline_storage.dart';
+import 'package:spotix/track_extension.dart';
+import 'package:spotix/content_image.dart';
 
 const SpotifyClient _spotifyClient = SpotifyClient();
 
-void main() {
+Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
-  runApp(const App());
+
+  final SharedPreferences sharedPreferences =
+      await SharedPreferences.getInstance();
+
+  final OfflineStorage offlineStorage = OfflineStorage(sharedPreferences);
+
+  runApp(
+    ChangeNotifierProvider<AppThemeController>(
+      create: (_) => AppThemeController(offlineStorage),
+      child: const App(),
+    ),
+  );
 }
 
 class App extends StatelessWidget {
@@ -24,16 +39,22 @@ class App extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return MaterialApp(
-      debugShowCheckedModeBanner: false,
-      title: 'Spotix',
-      theme: ThemeData(
-        primarySwatch: Colors.green,
-      ),
-      home: ChangeNotifierProvider<ContentProvider>(
-        create: (_) => ContentProvider(),
-        child: const HomePage(),
-      ),
+    return AnimatedBuilder(
+      animation: context.read<AppThemeController>(),
+      builder: (_, __) {
+        return MaterialApp(
+          debugShowCheckedModeBanner: false,
+          restorationScopeId: 'spotix-1.0.0+1',
+          title: 'Spotix',
+          themeMode: context.read<AppThemeController>().themeMode,
+          theme: AppThemes.light,
+          darkTheme: AppThemes.dark,
+          home: ChangeNotifierProvider<ContentProvider>(
+            create: (_) => ContentProvider(),
+            child: const HomePage(),
+          ),
+        );
+      },
     );
   }
 }
@@ -66,14 +87,36 @@ class _HomePageState extends State<HomePage>
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        elevation: 0,
-        shadowColor: Colors.transparent,
-        systemOverlayStyle: const SystemUiOverlayStyle(
-          statusBarColor: Colors.transparent,
-          statusBarIconBrightness: Brightness.light,
-        ),
         title: const Text('Spotix'),
         actions: <Widget>[
+          IconButton(
+            icon: AnimatedSwitcher(
+              duration: const Duration(milliseconds: 250),
+              switchInCurve: Curves.fastLinearToSlowEaseIn,
+              transitionBuilder: (
+                Widget child,
+                Animation<double> animation,
+              ) {
+                return RotationTransition(
+                  turns: animation,
+                  child: FadeTransition(
+                    opacity: animation,
+                    child: child,
+                  ),
+                );
+              },
+              child: context.read<AppThemeController>().isDarkMode
+                  ? const Icon(
+                      Icons.dark_mode_rounded,
+                      key: ValueKey<bool>(true),
+                    )
+                  : const Icon(
+                      Icons.light_mode_rounded,
+                      key: ValueKey<bool>(false),
+                    ),
+            ),
+            onPressed: context.read<AppThemeController>().toggleDarkMode,
+          ),
           IconButton(
             icon: const Icon(Icons.info_rounded),
             onPressed: _onInfoPressed,
@@ -117,7 +160,7 @@ class _HomePageState extends State<HomePage>
                 else
                   const SliverFillRemaining(
                     child: Center(
-                      child: Text('Loading...'),
+                      child: CupertinoActivityIndicator(radius: 20),
                     ),
                   ),
                 const SliverToBoxAdapter(
@@ -131,76 +174,115 @@ class _HomePageState extends State<HomePage>
       bottomSheet: ValueListenableBuilder<TrackState?>(
         valueListenable: _spotifyTrackState,
         builder: (_, TrackState? currentState, __) {
-          if (currentState == null) {
-            return const SizedBox.shrink();
-          }
-          final String currentTrackText = currentState
-                  .track.artist.name.isNotEmpty
-              ? '${currentState.track.artist.name} - ${currentState.track.name}'
-              : currentState.track.name;
-
           return Container(
-            height: 120,
-            decoration: BoxDecoration(
-              color: Colors.grey[50],
-              boxShadow: <BoxShadow>[
-                BoxShadow(
-                  blurRadius: 0.5,
-                  color: Colors.grey[200]!,
-                  offset: const Offset(0.0, -6.0),
-                )
-              ],
+            height: 70,
+            padding: const EdgeInsets.symmetric(
+              horizontal: 20,
+              vertical: 12,
             ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+            color: Theme.of(context).backgroundColor,
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: <Widget>[
-                Padding(
-                  padding: const EdgeInsets.all(12),
-                  child: Text(
-                    currentTrackText,
-                    textAlign: TextAlign.center,
+                Flexible(
+                  flex: 4,
+                  child: Container(
+                    height: 45,
+                    margin: const EdgeInsets.only(right: 8),
+                    child: Row(
+                      children: <Widget>[
+                        if (currentState != null)
+                          Padding(
+                            padding: const EdgeInsets.only(right: 6),
+                            child: ContentImage(
+                              height: 35,
+                              width: 35,
+                              borderRadius:
+                                  const BorderRadius.all(Radius.circular(3)),
+                              image: currentState.track,
+                            ),
+                          ),
+                        Flexible(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: <Widget>[
+                              Flexible(
+                                child: ScrollableText(
+                                  currentState?.track.name ?? '-',
+                                  maxLines: 1,
+                                  style: AppTextStyles.labelLarge,
+                                ),
+                              ),
+                              if (currentState?.track.artistText.isNotEmpty ==
+                                  true)
+                                Flexible(
+                                  child: Padding(
+                                    padding: const EdgeInsets.only(top: 2),
+                                    child: ScrollableText(
+                                      currentState!.track.artistText,
+                                      maxLines: 1,
+                                      style: AppTextStyles.labelNormal,
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                 ),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: <Widget>[
-                      GestureDetector(
-                        behavior: HitTestBehavior.opaque,
-                        onTap: _spotifyClient.skipPrevious,
-                        child: const Padding(
-                          padding: EdgeInsets.all(8.0),
-                          child: Icon(
-                            Icons.skip_previous_rounded,
-                            size: 60,
+                Expanded(
+                  flex: 3,
+                  child: SizedBox(
+                    height: 45,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: <Widget>[
+                        GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: currentState != null
+                              ? _spotifyClient.skipPrevious
+                              : null,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 4),
+                            child: Icon(
+                              Icons.skip_previous_rounded,
+                              color: currentState != null ? null : Colors.grey,
+                              size: 40,
+                            ),
                           ),
                         ),
-                      ),
-                      GestureDetector(
-                        behavior: HitTestBehavior.opaque,
-                        onTap: _playOrPause,
-                        child: Padding(
-                          padding: const EdgeInsets.all(8.0),
-                          child: AnimatedIcon(
-                            icon: AnimatedIcons.play_pause,
-                            size: 60,
-                            progress: _playButtonAnimationController,
+                        GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: currentState != null ? _playOrPause : null,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 4),
+                            child: AnimatedIcon(
+                              icon: AnimatedIcons.play_pause,
+                              color: currentState != null ? null : Colors.grey,
+                              size: 40,
+                              progress: _playButtonAnimationController,
+                            ),
                           ),
                         ),
-                      ),
-                      GestureDetector(
-                        behavior: HitTestBehavior.opaque,
-                        onTap: _spotifyClient.skipNext,
-                        child: const Padding(
-                          padding: EdgeInsets.all(8.0),
-                          child: Icon(
-                            Icons.skip_next_rounded,
-                            size: 60,
+                        GestureDetector(
+                          behavior: HitTestBehavior.opaque,
+                          onTap: currentState != null
+                              ? _spotifyClient.skipNext
+                              : null,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 4),
+                            child: Icon(
+                              Icons.skip_next_rounded,
+                              color: currentState != null ? null : Colors.grey,
+                              size: 40,
+                            ),
                           ),
                         ),
-                      ),
-                    ],
+                      ],
+                    ),
                   ),
                 ),
               ],
@@ -264,7 +346,7 @@ class _HomePageState extends State<HomePage>
       onError: (Object error, StackTrace stackTrace) {
         log(
           'An error occurred while listening to SpotifyClient.onAuthStateChanged',
-          name: '_HomePageState._checkSpotifyApp',
+          name: '_HomePageState._initSpotifyListeners',
           error: error,
           stackTrace: stackTrace,
         );
@@ -275,7 +357,7 @@ class _HomePageState extends State<HomePage>
       onError: (Object error, StackTrace stackTrace) {
         log(
           'An error occurred while listening to SpotifyClient.onConnectionStateChanged',
-          name: '_HomePageState._checkSpotifyApp',
+          name: '_HomePageState._initSpotifyListeners',
           error: error,
           stackTrace: stackTrace,
         );
@@ -286,7 +368,7 @@ class _HomePageState extends State<HomePage>
       onError: (Object error, StackTrace stackTrace) {
         log(
           'An error occurred while listening to SpotifyClient.onTrackChanged',
-          name: '_HomePageState._checkSpotifyApp',
+          name: '_HomePageState._initSpotifyListeners',
           error: error,
           stackTrace: stackTrace,
         );
@@ -382,13 +464,7 @@ class ContentSection extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 20.0),
-            child: Text(
-              item.title,
-              style: Theme.of(context).textTheme.headline6,
-            ),
-          ),
+          SectionTitle(item: item),
           const SizedBox(height: 10),
           SizedBox(
             height: itemsHeight,
@@ -427,24 +503,21 @@ class ContentSection extends StatelessWidget {
   }
 }
 
-class ContentImagePlaceholder extends StatelessWidget {
-  const ContentImagePlaceholder({
+class SectionTitle extends StatelessWidget {
+  const SectionTitle({
     Key? key,
-    required this.height,
-    required this.width,
+    required this.item,
   }) : super(key: key);
 
-  final double height;
-  final double width;
+  final ContentItem item;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: height,
-      width: width,
-      color: Colors.grey[300],
-      child: const Icon(
-        Icons.queue_music_rounded,
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 20.0),
+      child: Text(
+        item.title,
+        style: AppTextStyles.titleLarge,
       ),
     );
   }
@@ -468,77 +541,42 @@ class ContentItemContainer extends StatelessWidget {
   Widget build(BuildContext context) {
     return InkWell(
       onTap: () => onTapped(item),
-      borderRadius: const BorderRadius.all(Radius.circular(20)),
+      borderRadius: const BorderRadius.all(Radius.circular(5)),
       child: Container(
         width: itemWidth,
         decoration: const BoxDecoration(
-          borderRadius: BorderRadius.all(Radius.circular(20)),
+          borderRadius: BorderRadius.all(Radius.circular(5)),
         ),
         clipBehavior: Clip.hardEdge,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: <Widget>[
-            if (item.hasImageUrl)
-              CachedNetworkImage(
-                cacheKey: item.id,
-                imageUrl: item.imageUri,
-                width: itemWidth,
-                height: itemWidth,
-                errorWidget: (_, __, ___) {
-                  return ContentImagePlaceholder(
-                    width: itemWidth,
-                    height: itemWidth,
-                  );
-                },
-              )
-            else
-              FutureBuilder<Uint8List?>(
-                future: item.getImageBytes(_spotifyClient),
-                builder: (_, AsyncSnapshot<Uint8List?> imageBytesFn) {
-                  if (imageBytesFn.data == null) {
-                    return ContentImagePlaceholder(
-                      width: itemWidth,
-                      height: itemWidth,
-                    );
-                  }
-                  return Image.memory(
-                    imageBytesFn.data!,
-                    width: itemWidth,
-                    height: itemWidth,
-                    errorBuilder: (_, __, ___) {
-                      return ContentImagePlaceholder(
-                        width: itemWidth,
-                        height: itemWidth,
-                      );
-                    },
-                  );
-                },
-              ),
+            ContentImage(
+              image: item,
+              height: itemWidth,
+              width: itemWidth,
+            ),
+            const SizedBox(height: 8),
             Flexible(
               child: Padding(
-                padding: const EdgeInsets.all(8.0),
+                padding: const EdgeInsets.symmetric(horizontal: 8),
                 child: Text(
                   item.title,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context)
-                      .textTheme
-                      .titleMedium
-                      ?.copyWith(fontWeight: FontWeight.w500),
+                  style: AppTextStyles.titleRegular,
                 ),
               ),
             ),
+            const SizedBox(height: 6),
             Flexible(
               child: Padding(
-                padding: const EdgeInsets.all(8.0),
+                padding: const EdgeInsets.symmetric(horizontal: 8),
                 child: Text(
                   item.subtitle,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: Theme.of(context)
-                      .textTheme
-                      .subtitle2
-                      ?.copyWith(fontWeight: FontWeight.w300),
+                  style: AppTextStyles.subtitle,
                 ),
               ),
             ),

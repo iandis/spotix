@@ -14,6 +14,8 @@ dependencies:
   flutter:
     sdk: flutter
   provider: 6.0.3
+  quiver: 3.1.0
+  shared_preferences: 2.0.15
   spotify_client:
     path: modules/spotify_client
 
@@ -21,7 +23,21 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
 
-  flutter_lints: ^1.0.0
+  flutter_lints: 1.0.0
 
 flutter:
   uses-material-design: true
+
+  fonts:
+  - family: "Maison Neue"
+    fonts:
+      - asset: assets/fonts/MaisonNeue-300.ttf
+        weight: 300
+      - asset: assets/fonts/MaisonNeue-400.ttf
+        weight: 400
+      - asset: assets/fonts/MaisonNeue-500.ttf
+        weight: 500
+      - asset: assets/fonts/MaisonNeue-600.ttf
+        weight: 600
+      - asset: assets/fonts/MaisonNeue-700.ttf
+        weight: 700
