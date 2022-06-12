@@ -39,9 +39,8 @@ class App extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return AnimatedBuilder(
-      animation: context.read<AppThemeController>(),
-      builder: (_, __) {
+    return Consumer<AppThemeController>(
+      builder: (_, __, ___) {
         return MaterialApp(
           debugShowCheckedModeBanner: false,
           restorationScopeId: 'spotix-1.0.1',
@@ -86,43 +85,6 @@ class _HomePageState extends State<HomePage>
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Spotix'),
-        actions: <Widget>[
-          IconButton(
-            icon: AnimatedSwitcher(
-              duration: const Duration(milliseconds: 250),
-              switchInCurve: Curves.fastLinearToSlowEaseIn,
-              transitionBuilder: (
-                Widget child,
-                Animation<double> animation,
-              ) {
-                return RotationTransition(
-                  turns: animation,
-                  child: FadeTransition(
-                    opacity: animation,
-                    child: child,
-                  ),
-                );
-              },
-              child: context.read<AppThemeController>().isDarkMode
-                  ? const Icon(
-                      Icons.dark_mode_rounded,
-                      key: ValueKey<bool>(true),
-                    )
-                  : const Icon(
-                      Icons.light_mode_rounded,
-                      key: ValueKey<bool>(false),
-                    ),
-            ),
-            onPressed: context.read<AppThemeController>().toggleDarkMode,
-          ),
-          IconButton(
-            icon: const Icon(Icons.info_rounded),
-            onPressed: _onInfoPressed,
-          ),
-        ],
-      ),
       body: ValueListenableBuilder<bool>(
         valueListenable: _spotifyConnectedState,
         builder: (_, bool isConnected, Widget? child) {
@@ -131,12 +93,52 @@ class _HomePageState extends State<HomePage>
           }
           return child!;
         },
-        child: Consumer<ContentProvider>(
-          builder: (_, ContentProvider contentProvider, __) {
-            final List<ContentItem> sections = contentProvider.sections.items;
+        child: Selector<ContentProvider, List<ContentItem>>(
+          selector: (_, ContentProvider contentProvider) {
+            return contentProvider.sections.items;
+          },
+          builder: (_, List<ContentItem> sections, __) {
             return CustomScrollView(
               physics: const BouncingScrollPhysics(),
               slivers: <Widget>[
+                SliverAppBar(
+                  title: const Text('Spotix'),
+                  actions: <Widget>[
+                    IconButton(
+                      icon: AnimatedSwitcher(
+                        duration: const Duration(milliseconds: 250),
+                        switchInCurve: Curves.fastLinearToSlowEaseIn,
+                        transitionBuilder: (
+                          Widget child,
+                          Animation<double> animation,
+                        ) {
+                          return RotationTransition(
+                            turns: animation,
+                            child: FadeTransition(
+                              opacity: animation,
+                              child: child,
+                            ),
+                          );
+                        },
+                        child: context.read<AppThemeController>().isDarkMode
+                            ? const Icon(
+                                Icons.dark_mode_rounded,
+                                key: ValueKey<bool>(true),
+                              )
+                            : const Icon(
+                                Icons.light_mode_rounded,
+                                key: ValueKey<bool>(false),
+                              ),
+                      ),
+                      onPressed:
+                          context.read<AppThemeController>().toggleDarkMode,
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.info_rounded),
+                      onPressed: _onInfoPressed,
+                    ),
+                  ],
+                ),
                 if (sections.isNotEmpty)
                   CupertinoSliverRefreshControl(
                     onRefresh: _onRefreshRecommendedContents,
@@ -152,7 +154,7 @@ class _HomePageState extends State<HomePage>
                     delegate: SliverChildBuilderDelegate(
                       (_, int index) {
                         final ContentItem item = sections[index];
-                        return ContentSection(item: item);
+                        return ContentSection(index: index, item: item);
                       },
                       childCount: sections.length,
                     ),
@@ -164,7 +166,7 @@ class _HomePageState extends State<HomePage>
                     ),
                   ),
                 const SliverToBoxAdapter(
-                  child: SizedBox(height: 150),
+                  child: SizedBox(height: 70),
                 ),
               ],
             );
@@ -444,34 +446,42 @@ class _HomePageState extends State<HomePage>
   }
 }
 
-class ContentSection extends StatelessWidget {
+class ContentSection extends StatefulWidget {
   const ContentSection({
     Key? key,
     this.sectionHeight = 300,
     this.itemsHeight = 250,
+    required this.index,
     required this.item,
   }) : super(key: key);
 
   final double sectionHeight;
   final double itemsHeight;
 
+  final int index;
   final ContentItem item;
 
   @override
+  State<ContentSection> createState() => _ContentSectionState();
+}
+
+class _ContentSectionState extends State<ContentSection> {
+  @override
   Widget build(BuildContext context) {
     return SizedBox(
-      height: sectionHeight,
+      height: widget.sectionHeight,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
-          SectionTitle(item: item),
+          SectionTitle(item: widget.item),
           const SizedBox(height: 10),
           SizedBox(
-            height: itemsHeight,
-            child: Consumer<ContentProvider>(
-              builder: (_, ContentProvider contentProvider, __) {
-                final List<ContentItem> sectionItems =
-                    contentProvider.getSectionItems(item).items;
+            height: widget.itemsHeight,
+            child: Selector<ContentProvider, List<ContentItem>>(
+              selector: (_, ContentProvider contentProvider) {
+                return contentProvider.sectionItemList[widget.index].items;
+              },
+              builder: (_, List<ContentItem> sectionItems, __) {
                 return ListView.separated(
                   padding: const EdgeInsets.symmetric(horizontal: 20.0),
                   scrollDirection: Axis.horizontal,
@@ -494,6 +504,33 @@ class ContentSection extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  late final ContentProvider _contentProvider;
+
+  @override
+  void initState() {
+    super.initState();
+    _contentProvider = context.read<ContentProvider>();
+    _initItems();
+  }
+
+  @override
+  void didUpdateWidget(ContentSection oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    _initItems();
+  }
+
+  void _initItems() {
+    if (_contentProvider.sectionItemListState[widget.index] !=
+            ContentState.init ||
+        !widget.item.hasChildren) {
+      return;
+    }
+
+    SchedulerBinding.instance!.addPostFrameCallback((_) {
+      _contentProvider.refreshSectionItemsOf(widget.index, widget.item);
+    });
   }
 
   void _onChildTapped(ContentItem item) {

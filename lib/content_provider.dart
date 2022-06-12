@@ -8,9 +8,6 @@ enum ContentState { init, loading, loaded }
 
 const SpotifyClient _spotifyClient = SpotifyClient();
 
-final Map<String, Future<Uint8List?>> _cachedImageBytes =
-    LruMap<String, Future<Uint8List?>>(maximumSize: 100);
-
 class ContentProvider extends ChangeNotifier {
   ContentState _sectionState = ContentState.init;
   ContentState get sectionState => _sectionState;
@@ -18,16 +15,11 @@ class ContentProvider extends ChangeNotifier {
   ContentItems _sections = ContentItems.defaultValue;
   ContentItems get sections => _sections;
 
-  Map<ContentItem, ContentItems> _sectionItems = <ContentItem, ContentItems>{};
-  ContentItems getSectionItems(ContentItem section) {
-    return _sectionItems[section]!;
-  }
+  List<ContentItems> _sectionItemList = <ContentItems>[];
+  List<ContentItems> get sectionItemList => _sectionItemList;
 
-  Map<ContentItem, ContentState> _sectionItemsState =
-      <ContentItem, ContentState>{};
-  ContentState getSectionItemsState(ContentItem section) {
-    return _sectionItemsState[section]!;
-  }
+  List<ContentState> _sectionItemListState = <ContentState>[];
+  List<ContentState> get sectionItemListState => _sectionItemListState;
 
   Future<void> refreshSections() async {
     final bool isConnected = await _spotifyClient.currentConnectionState ==
@@ -40,38 +32,55 @@ class ContentProvider extends ChangeNotifier {
     final ContentItems sections =
         await _spotifyClient.getContentRecommendations();
     _sections = sections;
+    _initSectionItems(sections.items);
 
     _sectionState = ContentState.loaded;
     notifyListeners();
-
-    refreshSectionItems();
   }
 
-  Future<void> refreshSectionItems() async {
-    final List<Future<void>> processList = <Future<void>>[];
-    for (final ContentItem item in _sections.items) {
+  void _initSectionItems(
+    List<ContentItem> sections, {
+    void Function(int index, ContentItem item)? onEach,
+  }) {
+    for (int index = 0; index < sections.length; index++) {
+      final ContentItem item = sections[index];
       if (!item.hasChildren) continue;
-      _sectionItems[item] ??= ContentItems.defaultValue;
-      _sectionItemsState[item] = ContentState.init;
-      processList.add(refreshSectionItemsOf(item));
+      if (index > _sectionItemList.length - 1) {
+        _sectionItemList.add(ContentItems.defaultValue);
+        _sectionItemListState.add(ContentState.init);
+      } else {
+        _sectionItemListState[index] = ContentState.init;
+      }
+      onEach?.call(index, item);
     }
-    await Future.wait<void>(processList);
-    notifyListeners();
+    if (_sections.items.length < _sectionItemList.length) {
+      _sectionItemList.removeRange(
+        _sections.items.length,
+        _sectionItemList.length,
+      );
+    }
   }
 
-  Future<void> refreshSectionItemsOf(ContentItem section) async {
-    if (getSectionItemsState(section) == ContentState.loading) return;
-    _sectionItemsState[section] = ContentState.loading;
+  Future<void> refreshSectionItemsOf(int index, ContentItem section) async {
+    if (_sectionItemListState[index] == ContentState.loading) return;
+    _sectionItemListState[index] = ContentState.loading;
+    notifyListeners();
 
     final ContentItems sectionItems = await _spotifyClient.getContentChildren(
       item: section,
       limit: 10,
       offset: 0,
     );
-    _sectionItems[section] = sectionItems;
-
-    _sectionItemsState[section] = ContentState.loaded;
+    // Prevent losing reference to current items
+    _sectionItemList[index] = _sectionItemList[index] != sectionItems
+        ? sectionItems
+        : _sectionItemList[index];
+    _sectionItemListState[index] = ContentState.loaded;
+    notifyListeners();
   }
+
+  final Map<String, Future<Uint8List?>> _cachedImageBytes =
+      LruMap<String, Future<Uint8List?>>(maximumSize: 100);
 
   Future<Uint8List?> getImageBytes(String imageUri) {
     return _cachedImageBytes[imageUri] ??=
@@ -81,8 +90,8 @@ class ContentProvider extends ChangeNotifier {
   void clearItems() {
     _sectionState = ContentState.init;
     _sections = ContentItems.defaultValue;
-    _sectionItems = <ContentItem, ContentItems>{};
-    _sectionItemsState = <ContentItem, ContentState>{};
+    _sectionItemList = <ContentItems>[];
+    _sectionItemListState = <ContentState>[];
     notifyListeners();
   }
 }
