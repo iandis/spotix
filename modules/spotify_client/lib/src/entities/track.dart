@@ -2,11 +2,12 @@ import 'package:json_annotation/json_annotation.dart';
 import 'package:spotify_client/src/entities/album.dart';
 import 'package:spotify_client/src/entities/artist.dart';
 import 'package:spotify_client/src/entities/map_converter.dart';
+import 'package:spotify_client/src/entities/playback_image.dart';
 
 part 'track.g.dart';
 
 @JsonSerializable()
-class Track {
+class Track extends PlaybackImage {
   const Track({
     required this.uri,
     required this.name,
@@ -25,6 +26,7 @@ class Track {
 
   final int duration;
 
+  @override
   final String imageUri;
 
   @JsonKey(readValue: castFromNativeMap)

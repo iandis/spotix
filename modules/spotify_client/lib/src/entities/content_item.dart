@@ -1,10 +1,11 @@
 import 'package:equatable/equatable.dart';
 import 'package:json_annotation/json_annotation.dart';
+import 'package:spotify_client/src/entities/playback_image.dart';
 
 part 'content_item.g.dart';
 
 @JsonSerializable()
-class ContentItem extends Equatable {
+class ContentItem extends PlaybackImage with EquatableMixin {
   const ContentItem({
     required this.id,
     required this.uri,
@@ -26,14 +27,13 @@ class ContentItem extends Equatable {
 
   final String subtitle;
 
+  @override
   final String imageUri;
 
   @JsonKey(name: 'playable')
   final bool isPlayable;
 
   final bool hasChildren;
-
-  bool get hasImageUrl => imageUri.startsWith('https');
 
   Map<String, dynamic> get toJson => _$ContentItemToJson(this);
 
