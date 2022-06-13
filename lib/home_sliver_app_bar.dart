@@ -72,7 +72,7 @@ class _HomeSliverAppBarState extends State<HomeSliverAppBar> {
     showDialog<void>(
       context: context,
       builder: (_) {
-        return const AboutDialog(
+        return AboutDialog(
           applicationName: 'Spotix',
           applicationVersion: AppEnv.versionName,
           applicationLegalese: 'Copyright 2022 Iandi Santulus. '

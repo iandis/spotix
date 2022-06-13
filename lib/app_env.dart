@@ -1,3 +1,12 @@
+import 'package:package_info_plus/package_info_plus.dart';
+
 abstract class AppEnv {
-  static const String versionName = '1.0.2';
+  static Future<void> initialize() async {
+    final PackageInfo packageInfo = await PackageInfo.fromPlatform();
+    _versionName = packageInfo.version;
+  }
+
+  static String _versionName = '';
+
+  static String get versionName => _versionName;
 }

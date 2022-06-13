@@ -13,6 +13,7 @@ import 'package:spotix/home_page.dart';
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
+  await AppEnv.initialize();
   await initDI();
 
   runApp(
