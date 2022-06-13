@@ -21,8 +21,9 @@ sealed class SpotifyAuthorizationState {
 
 sealed class SpotifyConnectionState(val ordinal: Int) {
     object Connected : SpotifyConnectionState(0)
-    object Disconnected : SpotifyConnectionState(1)
-    class Error(val error: String) : SpotifyConnectionState(2)
+    object Connecting : SpotifyConnectionState(1)
+    object Disconnected : SpotifyConnectionState(2)
+    class Error(val error: String) : SpotifyConnectionState(3)
 }
 
 sealed class SpotifyTrackState {

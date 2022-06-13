@@ -13,6 +13,9 @@ import com.spotify.android.appremote.api.ConnectionParams;
 import com.spotify.android.appremote.api.Connector;
 import com.spotify.android.appremote.api.ContentApi;
 import com.spotify.android.appremote.api.SpotifyAppRemote;
+import com.spotify.android.appremote.api.error.SpotifyConnectionTerminatedException;
+import com.spotify.android.appremote.api.error.SpotifyDisconnectedException;
+import com.spotify.android.appremote.api.error.SpotifyRemoteServiceException;
 import com.spotify.protocol.client.CallResult;
 import com.spotify.protocol.client.ErrorCallback;
 import com.spotify.protocol.client.Subscription;
@@ -27,13 +30,10 @@ import com.spotify.sdk.android.auth.AuthorizationRequest;
 import com.spotify.sdk.android.auth.AuthorizationResponse;
 
 import java.io.ByteArrayOutputStream;
-import java.util.Objects;
 
 import app.iandis.spotify_client.entities.TrackState;
 import io.reactivex.rxjava3.core.Observable;
 import io.reactivex.rxjava3.subjects.BehaviorSubject;
-import kotlin.Unit;
-import kotlin.jvm.functions.Function1;
 
 class SpotifyClientImpl implements
         SpotifyClient, Connector.ConnectionListener,
@@ -153,7 +153,13 @@ class SpotifyClientImpl implements
     public void onFailure(Throwable error) {
         final String errorMsg = error.toString();
         Log.d(TAG, "Failed to connect spotify app remote: err=".concat(errorMsg));
-        _spotifyConnectionState.onNext(new SpotifyConnectionState.Error(errorMsg));
+        if (error instanceof SpotifyConnectionTerminatedException
+                || error instanceof SpotifyDisconnectedException
+                || error instanceof SpotifyRemoteServiceException) {
+            disconnect();
+        } else {
+            _spotifyConnectionState.onNext(new SpotifyConnectionState.Error(errorMsg));
+        }
     }
 
     /**
@@ -193,6 +199,7 @@ class SpotifyClientImpl implements
 
     @Override
     public void connect(@NonNull Context context) {
+        _spotifyConnectionState.onNext(SpotifyConnectionState.Connecting.INSTANCE);
         SpotifyAppRemote.connect(context, _spotifyConnectionParams, this);
     }
 
