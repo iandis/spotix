@@ -1,3 +1,6 @@
+## 1.0.5
+* Fix playback position running when paused
+
 ## 1.0.4
 * Add playback position time
 * Fix bug where `Unauthorized` state does not resetting all states
