@@ -152,6 +152,10 @@ class SpotifyClientImpl implements SpotifyClient {
     public void disconnect() {
         if (_spotifyAppRemote == null || !_spotifyAppRemote.isConnected()) return;
         SpotifyAppRemote.disconnect(_spotifyAppRemote);
+        reset();
+    }
+
+    private void reset() {
         _spotifyAppRemote = null;
         _spotifyAuthorizationState.onNext(SpotifyAuthorizationState.Unauthorized.INSTANCE);
         _spotifyConnectionState.onNext(SpotifyConnectionState.Disconnected.INSTANCE);
@@ -295,7 +299,7 @@ class SpotifyClientImpl implements SpotifyClient {
             if (error instanceof SpotifyConnectionTerminatedException
                     || error instanceof SpotifyDisconnectedException
                     || error instanceof SpotifyRemoteServiceException) {
-                disconnect();
+                reset();
             } else {
                 _spotifyConnectionState.onNext(new SpotifyConnectionState.Error(errorMsg));
             }
