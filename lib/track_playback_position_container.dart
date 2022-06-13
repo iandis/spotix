@@ -152,7 +152,8 @@ class _TrackPlaybackPositionContainerState
           : Duration(milliseconds: state.track!.duration)
       ..value = state.track == null
           ? 0
-          : state.playbackPosition / state.track!.duration
-      ..forward();
+          : state.playbackPosition / state.track!.duration;
+    if (state.isPaused) return;
+    _playbackPositionController.forward();
   }
 }
