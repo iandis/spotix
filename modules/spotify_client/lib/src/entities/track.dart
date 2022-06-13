@@ -1,3 +1,4 @@
+import 'package:equatable/equatable.dart';
 import 'package:json_annotation/json_annotation.dart';
 import 'package:spotify_client/src/entities/album.dart';
 import 'package:spotify_client/src/entities/artist.dart';
@@ -7,7 +8,7 @@ import 'package:spotify_client/src/entities/playback_image.dart';
 part 'track.g.dart';
 
 @JsonSerializable()
-class Track extends PlaybackImage {
+class Track extends PlaybackImage with EquatableMixin {
   const Track({
     required this.uri,
     required this.name,
@@ -39,6 +40,17 @@ class Track extends PlaybackImage {
   final List<Artist> artists;
 
   Map<String, dynamic> get toJson => _$TrackToJson(this);
+
+  @override
+  List<Object?> get props => <Object?>[
+        uri,
+        name,
+        duration,
+        imageUri,
+        album,
+        artist,
+        artists,
+      ];
 }
 
 List<Artist> _artistListFromJson(dynamic data) {

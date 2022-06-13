@@ -4,10 +4,11 @@ import 'dart:typed_data';
 import 'package:flutter/services.dart';
 import 'package:spotify_client/src/entities/content_items.dart';
 import 'package:spotify_client/src/entities/content_item.dart';
-import 'package:spotify_client/src/entities/track_state.dart';
-import 'package:spotify_client/src/spotify_connection_state.dart';
+import 'package:spotify_client/src/states/spotify_authorization_state.dart';
+import 'package:spotify_client/src/states/spotify_connection_state.dart';
 import 'package:spotify_client/src/spotify_client.dart';
 import 'package:spotify_client/src/spotify_image_dimension.dart';
+import 'package:spotify_client/src/states/spotify_player_state.dart';
 
 class SpotifyClientImpl implements SpotifyClient {
   const SpotifyClientImpl();
@@ -50,21 +51,6 @@ class SpotifyClientImpl implements SpotifyClient {
     return isSpotifyInstalled;
   }
 
-  @override
-  Future<String?> get currentAuthToken async {
-    try {
-      return await _methodChannel.invokeMethod<String>('currentAuthToken');
-    } catch (error, stackTrace) {
-      log(
-        'An error occurred while getting current auth token.',
-        name: 'SpotifyClientImpl.currentAuthToken',
-        error: error,
-        stackTrace: stackTrace,
-      );
-    }
-    return null;
-  }
-
   SpotifyConnectionState _convertOrdinalToConnectionState(int? ordinal) {
     return SpotifyConnectionState.values.firstWhere(
       (SpotifyConnectionState state) => state.index == ordinal,
@@ -73,47 +59,14 @@ class SpotifyClientImpl implements SpotifyClient {
   }
 
   @override
-  Future<SpotifyConnectionState> get currentConnectionState async {
-    SpotifyConnectionState currentState = SpotifyConnectionState.disconnected;
-    try {
-      final int? result =
-          await _methodChannel.invokeMethod<int>('currentConnectionState');
-      currentState = _convertOrdinalToConnectionState(result);
-    } catch (error, stackTrace) {
-      log(
-        'An error occurred while checking spotify app remote connection.',
-        name: 'SpotifyClientImpl.currentConnectionState',
-        error: error,
-        stackTrace: stackTrace,
-      );
-    }
-    return currentState;
-  }
-
-  @override
-  Future<TrackState?> get currentTrack async {
-    try {
-      final Map<Object?, Object?>? result = await _methodChannel
-          .invokeMapMethod<Object?, Object?>('currentTrack');
-      if (result != null) {
-        return TrackState.fromJson(Map<String, dynamic>.from(result));
-      }
-    } catch (error, stackTrace) {
-      log(
-        'An error occurred while getting current playing track.',
-        name: 'SpotifyClientImpl.currentTrack',
-        error: error,
-        stackTrace: stackTrace,
-      );
-    }
-    return null;
-  }
-
-  @override
-  Stream<String?> get onAuthTokenChanged {
+  Stream<SpotifyAuthorizationState> get onAuthStateChanged {
     return _authStateEventChannel
-        .receiveBroadcastStream('onAuthTokenChanged')
-        .map<String?>((dynamic data) => data as String?);
+        .receiveBroadcastStream('onAuthorizationStateChanged')
+        .map<SpotifyAuthorizationState>(
+          (dynamic data) => data is Map<dynamic, dynamic>
+              ? SpotifyAuthorizationState.fromJson(data)
+              : SpotifyAuthorizationState.defaultValue,
+        );
   }
 
   @override
@@ -126,13 +79,13 @@ class SpotifyClientImpl implements SpotifyClient {
   }
 
   @override
-  Stream<TrackState?> get onTrackChanged {
+  Stream<SpotifyPlayerState> get onPlayerStateChanged {
     return _trackStateEventChannel
-        .receiveBroadcastStream('onTrackChanged')
-        .map<TrackState?>(
+        .receiveBroadcastStream('onPlayerStateChanged')
+        .map<SpotifyPlayerState>(
           (dynamic data) => data is Map<dynamic, dynamic>
-              ? TrackState.fromJson(Map<String, dynamic>.from(data))
-              : null,
+              ? SpotifyPlayerState.fromJson(Map<String, dynamic>.from(data))
+              : SpotifyPlayerState.defaultValue,
         );
   }
 

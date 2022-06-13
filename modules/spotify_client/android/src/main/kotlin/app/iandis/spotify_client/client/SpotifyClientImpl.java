@@ -24,20 +24,19 @@ import com.spotify.protocol.types.ImageUri;
 import com.spotify.protocol.types.ListItem;
 import com.spotify.protocol.types.ListItems;
 import com.spotify.protocol.types.PlayerState;
-import com.spotify.protocol.types.Track;
 import com.spotify.sdk.android.auth.AuthorizationClient;
 import com.spotify.sdk.android.auth.AuthorizationRequest;
 import com.spotify.sdk.android.auth.AuthorizationResponse;
 
 import java.io.ByteArrayOutputStream;
 
-import app.iandis.spotify_client.entities.TrackState;
+import app.iandis.spotify_client.client.state.SpotifyAuthorizationState;
+import app.iandis.spotify_client.client.state.SpotifyConnectionState;
+import app.iandis.spotify_client.client.state.SpotifyPlayerState;
 import io.reactivex.rxjava3.core.Observable;
 import io.reactivex.rxjava3.subjects.BehaviorSubject;
 
-class SpotifyClientImpl implements
-        SpotifyClient, Connector.ConnectionListener,
-        Subscription.EventCallback<PlayerState> {
+class SpotifyClientImpl implements SpotifyClient {
 
     private static final String TAG = "spotify_client";
 
@@ -58,12 +57,19 @@ class SpotifyClientImpl implements
 
         this._spotifyConnectionParams = new ConnectionParams.Builder(clientId)
                 .setRedirectUri(redirectUri)
+                .showAuthView(false)
                 .build();
     }
 
     private final AuthorizationRequest _spotifyAuthorizationRequest;
 
     private final ConnectionParams _spotifyConnectionParams;
+
+    private final SpotifyConnectionStateListener _spotifyConnectionStateListener =
+            new SpotifyConnectionStateListener();
+
+    private final SpotifyPlayerStateListener _spotifyPlayerStateListener =
+            new SpotifyPlayerStateListener();
 
     @Nullable
     private SpotifyAppRemote _spotifyAppRemote;
@@ -77,16 +83,6 @@ class SpotifyClientImpl implements
         return _spotifyAuthorizationState;
     }
 
-    @Nullable
-    @Override
-    public String getSpotifyCurrentAuthToken() {
-        final SpotifyAuthorizationState currentState = _spotifyAuthorizationState.getValue();
-        if (currentState instanceof SpotifyAuthorizationState.Authorized) {
-            return ((SpotifyAuthorizationState.Authorized) currentState).getToken();
-        }
-        return null;
-    }
-
     private final BehaviorSubject<SpotifyConnectionState> _spotifyConnectionState =
             BehaviorSubject.createDefault(SpotifyConnectionState.Disconnected.INSTANCE);
 
@@ -96,70 +92,26 @@ class SpotifyClientImpl implements
         return _spotifyConnectionState;
     }
 
-    @NonNull
-    @Override
-    public SpotifyConnectionState getSpotifyCurrentConnectionState() {
-        return _spotifyConnectionState.getValue();
-    }
-
     private final
-    BehaviorSubject<SpotifyTrackState> _spotifyTrackState =
-            BehaviorSubject.createDefault(SpotifyTrackState.None.INSTANCE);
+    BehaviorSubject<SpotifyPlayerState> _spotifyPlayerState =
+            BehaviorSubject.createDefault(SpotifyPlayerState.None.INSTANCE);
 
     @NonNull
     @Override
-    public Observable<SpotifyTrackState> getSpotifyTrackState() {
-        return _spotifyTrackState;
+    public Observable<SpotifyPlayerState> getSpotifyPlayerState() {
+        return _spotifyPlayerState;
     }
 
-    @Nullable
     @Override
-    public Track getSpotifyCurrentTrack() {
-        final SpotifyTrackState currentState = _spotifyTrackState.getValue();
-        if (currentState instanceof SpotifyTrackState.Playing) {
-            return ((SpotifyTrackState.Playing) currentState).getTrackState().getTrack();
-        }
-        return null;
+    public boolean isSpotifyInstalled(@NonNull Context context) {
+        return SpotifyAppRemote.isSpotifyInstalled(context);
     }
 
-    /**
-     * This is for handling successful spotify connection
-     */
     @Override
-    public void onConnected(SpotifyAppRemote spotifyAppRemote) {
-        _spotifyAppRemote = spotifyAppRemote;
-        _spotifyAppRemote.getPlayerApi().subscribeToPlayerState().setEventCallback(this);
-        _spotifyConnectionState.onNext(SpotifyConnectionState.Connected.INSTANCE);
-
-        Log.i(TAG, "Connected to spotify app remote.");
-    }
-
-    /**
-     * This is for handling spotify player state events
-     */
-    @Override
-    public void onEvent(PlayerState data) {
-        final Track track = data.track;
-        final SpotifyTrackState nextState = track != null
-                ? new SpotifyTrackState.Playing(new TrackState(data.isPaused, track))
-                : SpotifyTrackState.None.INSTANCE;
-        _spotifyTrackState.onNext(nextState);
-    }
-
-    /**
-     * This is for handling spotify connection failure
-     */
-    @Override
-    public void onFailure(Throwable error) {
-        final String errorMsg = error.toString();
-        Log.d(TAG, "Failed to connect spotify app remote: err=".concat(errorMsg));
-        if (error instanceof SpotifyConnectionTerminatedException
-                || error instanceof SpotifyDisconnectedException
-                || error instanceof SpotifyRemoteServiceException) {
-            disconnect();
-        } else {
-            _spotifyConnectionState.onNext(new SpotifyConnectionState.Error(errorMsg));
-        }
+    public void requestAuthorization(@NonNull Activity activity) {
+        _spotifyAuthorizationState.onNext(SpotifyAuthorizationState.Authorizing.INSTANCE);
+        AuthorizationClient.openLoginActivity(
+                activity, _spotifyAuthorizationRequestCode, _spotifyAuthorizationRequest);
     }
 
     /**
@@ -175,10 +127,13 @@ class SpotifyClientImpl implements
             case TOKEN:
                 _spotifyAuthorizationState.onNext(
                         new SpotifyAuthorizationState.Authorized(response.getAccessToken()));
+                Log.i(TAG, "Authorized spotify access.");
                 break;
             case ERROR:
+                final String errorMsg = response.getError();
                 _spotifyAuthorizationState.onNext(
-                        new SpotifyAuthorizationState.Error(response.getError()));
+                        new SpotifyAuthorizationState.Error(errorMsg));
+                Log.e(TAG, "Spotify authorization failed: ".concat(errorMsg));
                 break;
             default:
         }
@@ -187,20 +142,10 @@ class SpotifyClientImpl implements
     }
 
     @Override
-    public boolean isSpotifyInstalled(@NonNull Context context) {
-        return SpotifyAppRemote.isSpotifyInstalled(context);
-    }
-
-    @Override
-    public void requestAuthorization(@NonNull Activity activity) {
-        AuthorizationClient.openLoginActivity(
-                activity, _spotifyAuthorizationRequestCode, _spotifyAuthorizationRequest);
-    }
-
-    @Override
     public void connect(@NonNull Context context) {
+        if (_spotifyAppRemote != null && _spotifyAppRemote.isConnected()) return;
         _spotifyConnectionState.onNext(SpotifyConnectionState.Connecting.INSTANCE);
-        SpotifyAppRemote.connect(context, _spotifyConnectionParams, this);
+        SpotifyAppRemote.connect(context, _spotifyConnectionParams, _spotifyConnectionStateListener);
     }
 
     @Override
@@ -210,7 +155,7 @@ class SpotifyClientImpl implements
         _spotifyAppRemote = null;
         _spotifyAuthorizationState.onNext(SpotifyAuthorizationState.Unauthorized.INSTANCE);
         _spotifyConnectionState.onNext(SpotifyConnectionState.Disconnected.INSTANCE);
-        _spotifyTrackState.onNext(SpotifyTrackState.None.INSTANCE);
+        _spotifyPlayerState.onNext(SpotifyPlayerState.None.INSTANCE);
     }
 
     @Override
@@ -296,9 +241,8 @@ class SpotifyClientImpl implements
     public void dispose() {
         _spotifyAuthorizationState.onComplete();
         _spotifyConnectionState.onComplete();
-        _spotifyTrackState.onComplete();
+        _spotifyPlayerState.onComplete();
     }
-
 
     @Override
     public void getContentChildren(
@@ -322,6 +266,61 @@ class SpotifyClientImpl implements
         _spotifyAppRemote
                 .getContentApi()
                 .playContentItem(item);
+    }
+
+    private class SpotifyConnectionStateListener implements Connector.ConnectionListener {
+        /**
+         * This is for handling successful spotify connection
+         */
+        @Override
+        public void onConnected(SpotifyAppRemote spotifyAppRemote) {
+            _spotifyAppRemote = spotifyAppRemote;
+            _spotifyAppRemote
+                    .getPlayerApi()
+                    .subscribeToPlayerState()
+                    .setEventCallback(_spotifyPlayerStateListener)
+                    .setErrorCallback(_spotifyPlayerStateListener);
+            _spotifyConnectionState.onNext(SpotifyConnectionState.Connected.INSTANCE);
+
+            Log.i(TAG, "Connected to spotify app remote.");
+        }
+
+        /**
+         * This is for handling spotify connection failure
+         */
+        @Override
+        public void onFailure(Throwable error) {
+            final String errorMsg = error.toString();
+            Log.d(TAG, "Failed to connect spotify app remote: err=".concat(errorMsg));
+            if (error instanceof SpotifyConnectionTerminatedException
+                    || error instanceof SpotifyDisconnectedException
+                    || error instanceof SpotifyRemoteServiceException) {
+                disconnect();
+            } else {
+                _spotifyConnectionState.onNext(new SpotifyConnectionState.Error(errorMsg));
+            }
+        }
+    }
+
+    private class SpotifyPlayerStateListener implements
+            Subscription.EventCallback<PlayerState>, ErrorCallback {
+        /**
+         * This is for handling spotify player state events
+         */
+        @Override
+        public void onEvent(PlayerState data) {
+            final SpotifyPlayerState nextState = new SpotifyPlayerState.Value(data);
+            _spotifyPlayerState.onNext(nextState);
+        }
+
+        /**
+         * This for handling spotify player state errors
+         */
+        @Override
+        public void onError(Throwable t) {
+            final SpotifyPlayerState nextError = new SpotifyPlayerState.Error(t);
+            _spotifyPlayerState.onNext(nextError);
+        }
     }
 
 }

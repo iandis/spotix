@@ -1,9 +1,10 @@
+import 'package:equatable/equatable.dart';
 import 'package:json_annotation/json_annotation.dart';
 
 part 'artist.g.dart';
 
 @JsonSerializable()
-class Artist {
+class Artist with EquatableMixin {
   const Artist({
     required this.uri,
     required this.name,
@@ -18,4 +19,7 @@ class Artist {
   final String name;
 
   Map<String, dynamic> get toJson => _$ArtistToJson(this);
+
+  @override
+  List<Object?> get props => <Object?>[uri, name];
 }

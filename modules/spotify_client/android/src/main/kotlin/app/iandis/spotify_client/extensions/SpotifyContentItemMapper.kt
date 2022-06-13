@@ -10,7 +10,7 @@ fun ListItems.toMap(): Map<String, Any?> {
     itemsMap["offset"] = this.offset
     itemsMap["total"] = this.total
     itemsMap["items"] = this.items.map { it.toMap() }
-    return itemsMap;
+    return itemsMap
 }
 
 object ListItem {

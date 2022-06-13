@@ -4,11 +4,10 @@ import android.app.Activity
 import android.content.Context
 import android.util.Log
 import androidx.annotation.NonNull
-import app.iandis.spotify_client.client.SpotifyAuthorizationState
-import app.iandis.spotify_client.client.SpotifyClient
-import app.iandis.spotify_client.client.SpotifyConnectionState
-import app.iandis.spotify_client.client.SpotifyTrackState
-import app.iandis.spotify_client.entities.TrackState
+import app.iandis.spotify_client.client.*
+import app.iandis.spotify_client.client.state.SpotifyAuthorizationState
+import app.iandis.spotify_client.client.state.SpotifyConnectionState
+import app.iandis.spotify_client.client.state.SpotifyPlayerState
 import app.iandis.spotify_client.extensions.ListItem
 import app.iandis.spotify_client.extensions.toMap
 import com.spotify.protocol.types.Image
@@ -25,14 +24,14 @@ internal class SpotifyClientPluginChannel(
     MethodChannel.MethodCallHandler,
     EventChannel.StreamHandler {
 
-    private var _spotifyAuthTokenStateListener: Disposable? = null
-    private var _eventSinkForAuthTokenState: EventChannel.EventSink? = null
+    private var _spotifyAuthorizationStateListener: Disposable? = null
+    private var _eventSinkForAuthorizationState: EventChannel.EventSink? = null
 
     private var _spotifyConnectionStateListener: Disposable? = null
     private var _eventSinkForConnectionState: EventChannel.EventSink? = null
 
-    private var _spotifyTrackListener: Disposable? = null
-    private var _eventSinkForTrackState: EventChannel.EventSink? = null
+    private var _spotifyPlayerStateListener: Disposable? = null
+    private var _eventSinkForPlayerState: EventChannel.EventSink? = null
 
     override fun onMethodCall(
         @NonNull call: MethodCall,
@@ -45,7 +44,6 @@ internal class SpotifyClientPluginChannel(
                 result.success(true)
             }
             "connect" -> {
-                _spotifyClient.disconnect()
                 _spotifyClient.connect(_context)
                 result.success(true)
             }
@@ -53,9 +51,6 @@ internal class SpotifyClientPluginChannel(
                 _spotifyClient.disconnect()
                 result.success(true)
             }
-            "currentAuthToken" -> result.success(_spotifyClient.spotifyCurrentAuthToken)
-            "currentConnectionState" -> result.success(_spotifyClient.spotifyCurrentConnectionState.ordinal)
-            "currentTrack" -> result.success(_spotifyClient.spotifyCurrentTrack?.toMap())
             "playPlaylist" -> {
                 val arguments: String? = call.arguments as? String
                 if (arguments != null) {
@@ -179,9 +174,9 @@ internal class SpotifyClientPluginChannel(
 
     override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
         when (arguments) {
-            "onAuthTokenChanged" -> _registerAuthTokenListener(events)
+            "onAuthorizationStateChanged" -> _registerAuthorizationStateListener(events)
             "onConnectionStateChanged" -> _registerConnectionStateListener(events)
-            "onTrackChanged" -> _registerTrackStateListener(events)
+            "onPlayerStateChanged" -> _registerPlayerStateListener(events)
             else -> {
                 Log.e("spotify_plugin_channel", "Unknown event name: $arguments")
                 events?.error(
@@ -194,21 +189,17 @@ internal class SpotifyClientPluginChannel(
         }
     }
 
-    private fun _registerAuthTokenListener(eventSink: EventChannel.EventSink?) {
-        _unregisterAuthTokenListener()
-        _eventSinkForAuthTokenState = eventSink
-        _spotifyAuthTokenStateListener = _spotifyClient.spotifyAuthorizationState.subscribe {
+    private fun _registerAuthorizationStateListener(eventSink: EventChannel.EventSink?) {
+        _unregisterAuthorizationStateListener()
+        _eventSinkForAuthorizationState = eventSink
+        _spotifyAuthorizationStateListener = _spotifyClient.spotifyAuthorizationState.subscribe {
             when (it) {
-                is SpotifyAuthorizationState.Error -> _eventSinkForAuthTokenState?.error(
+                is SpotifyAuthorizationState.Error -> _eventSinkForAuthorizationState?.error(
                     "SPOTIFY_AUTHORIZATION_ERROR",
                     "Authorization error.",
                     it.error
                 )
-                else -> {
-                    val token: String? =
-                        if (it is SpotifyAuthorizationState.Authorized) it.token else null
-                    _eventSinkForAuthTokenState?.success(token)
-                }
+                else -> _eventSinkForAuthorizationState?.success(it.toMap())
             }
 
         }
@@ -229,30 +220,39 @@ internal class SpotifyClientPluginChannel(
         }
     }
 
-    private fun _registerTrackStateListener(eventSink: EventChannel.EventSink?) {
-        _unregisterTrackStateListener()
-        _eventSinkForTrackState = eventSink
-        _spotifyTrackListener = _spotifyClient.spotifyTrackState.subscribe {
-            val trackState: TrackState? =
-                if (it is SpotifyTrackState.Playing) it.trackState else null
-            _eventSinkForTrackState?.success(trackState?.toMap())
+    private fun _registerPlayerStateListener(eventSink: EventChannel.EventSink?) {
+        _unregisterPlayerStateListener()
+        _eventSinkForPlayerState = eventSink
+        _spotifyPlayerStateListener = _spotifyClient.spotifyPlayerState.subscribe {
+            when (it) {
+                is SpotifyPlayerState.Error -> _eventSinkForPlayerState?.error(
+                    "SPOTIFY_PLAYER_ERROR",
+                    "Player error.",
+                    it.error
+                )
+                else -> {
+                    val spotifyPlayerState: Map<String, Any?>? =
+                        if (it is SpotifyPlayerState.Value) it.toMap() else null
+                    _eventSinkForPlayerState?.success(spotifyPlayerState)
+                }
+            }
         }
     }
 
     override fun onCancel(arguments: Any?) {
         when (arguments) {
-            "onAuthTokenChanged" -> _unregisterAuthTokenListener()
+            "onAuthorizationStateChanged" -> _unregisterAuthorizationStateListener()
             "onConnectionStateChanged" -> _unregisterConnectionStateListener()
-            "onTrackChanged" -> _unregisterTrackStateListener()
+            "onPlayerStateChanged" -> _unregisterPlayerStateListener()
         }
     }
 
-    private fun _unregisterAuthTokenListener() {
-        _spotifyAuthTokenStateListener?.dispose()
-        _spotifyAuthTokenStateListener = null
+    private fun _unregisterAuthorizationStateListener() {
+        _spotifyAuthorizationStateListener?.dispose()
+        _spotifyAuthorizationStateListener = null
 
-        _eventSinkForAuthTokenState?.endOfStream()
-        _eventSinkForAuthTokenState = null
+        _eventSinkForAuthorizationState?.endOfStream()
+        _eventSinkForAuthorizationState = null
     }
 
     private fun _unregisterConnectionStateListener() {
@@ -263,17 +263,17 @@ internal class SpotifyClientPluginChannel(
         _eventSinkForConnectionState = null
     }
 
-    private fun _unregisterTrackStateListener() {
-        _spotifyTrackListener?.dispose()
-        _spotifyTrackListener = null
+    private fun _unregisterPlayerStateListener() {
+        _spotifyPlayerStateListener?.dispose()
+        _spotifyPlayerStateListener = null
 
-        _eventSinkForTrackState?.endOfStream()
-        _eventSinkForTrackState = null
+        _eventSinkForPlayerState?.endOfStream()
+        _eventSinkForPlayerState = null
     }
 
     fun dispose() {
-        _unregisterAuthTokenListener()
+        _unregisterAuthorizationStateListener()
         _unregisterConnectionStateListener()
-        _unregisterTrackStateListener()
+        _unregisterPlayerStateListener()
     }
 }
