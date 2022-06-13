@@ -391,7 +391,7 @@ packages:
       path: "modules/spotify_client"
       relative: true
     source: path
-    version: "0.0.2"
+    version: "0.0.3"
   sqflite:
     dependency: transitive
     description:
