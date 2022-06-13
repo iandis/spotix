@@ -28,17 +28,14 @@ class _TrackPlayerContainerState extends State<TrackPlayerContainer>
   @override
   Widget build(BuildContext context) {
     return Container(
-      height: 73,
+      height: 80,
       color: Theme.of(context).backgroundColor,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           const TrackPlaybackPositionContainer(),
           Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: 20,
-              vertical: 12,
-            ),
+            padding: const EdgeInsets.fromLTRB(20, 4, 20, 8),
             child: StreamBuilder<SpotifyPlayerState>(
               initialData: SpotifyPlayerState.defaultValue,
               stream: _playerStateListener.onChanged,

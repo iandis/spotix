@@ -1,4 +1,5 @@
 import 'package:flutter/widgets.dart';
+import 'package:spotix/app_colors.dart';
 
 abstract class AppTextStyles {
   static const String fontFamily = 'Maison Neue';
@@ -27,5 +28,14 @@ abstract class AppTextStyles {
   static const TextStyle subtitle = TextStyle(
     fontSize: 14,
     fontWeight: FontWeight.w300,
+  );
+
+  static const TextStyle caption = TextStyle(
+    fontSize: 12,
+  );
+
+  static const TextStyle hint = TextStyle(
+    color: AppColors.grey200,
+    fontSize: 12,
   );
 }

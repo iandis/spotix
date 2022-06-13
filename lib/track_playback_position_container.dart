@@ -3,7 +3,9 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:spotify_client/spotify_client.dart';
 import 'package:spotix/app_colors.dart';
+import 'package:spotix/app_text_styles.dart';
 import 'package:spotix/di.dart';
+import 'package:spotix/extensions/num_extensions.dart';
 import 'package:spotix/listeners/player_state_listener.dart';
 
 class TrackPlaybackPositionContainer extends StatefulWidget {
@@ -37,15 +39,32 @@ class _TrackPlaybackPositionContainerState
           animation: _playbackPositionController,
           builder: (_, __) {
             final double currentProgress = _playbackPositionController.value;
-            return Container(
-              width: currentProgress * maxWidth,
-              height: 3,
-              decoration: const BoxDecoration(
-                color: AppColors.primarySwatch,
-                borderRadius: BorderRadius.horizontal(
-                  right: Radius.circular(2),
+            final double currentPositionTime =
+                currentProgress * (_previousState.track?.duration ?? 0);
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: <Widget>[
+                Container(
+                  width: currentProgress * maxWidth,
+                  height: 3,
+                  decoration: const BoxDecoration(
+                    color: AppColors.primarySwatch,
+                    borderRadius: BorderRadius.horizontal(
+                      right: Radius.circular(2),
+                    ),
+                  ),
                 ),
-              ),
+                const SizedBox(height: 4),
+                SizedBox(
+                  width: maxWidth,
+                  child: Center(
+                    child: Text(
+                      currentPositionTime.inTime,
+                      style: AppTextStyles.hint,
+                    ),
+                  ),
+                ),
+              ],
             );
           },
         );
@@ -105,12 +124,17 @@ class _TrackPlaybackPositionContainerState
       return _playbackPositionController.stop();
     } else if (!newState.isPaused && oldState.isPaused) {
       _playbackPositionController.forward();
-    } else if (newState.track != null) {
-      await _playbackPositionController.animateTo(
-        newState.playbackPosition / newState.track!.duration,
-        duration: _reverseDuration,
-        curve: Curves.fastLinearToSlowEaseIn,
-      );
+    } else if (newState.track != null && oldState.track != null) {
+      if ((newState.playbackPosition - oldState.playbackPosition).abs() > 200) {
+        await _playbackPositionController.animateTo(
+          newState.playbackPosition / newState.track!.duration,
+          duration: _reverseDuration,
+          curve: Curves.fastLinearToSlowEaseIn,
+        );
+      } else {
+        _playbackPositionController.value =
+            newState.playbackPosition / newState.track!.duration;
+      }
       return _playbackPositionController.forward();
     }
   }
@@ -121,6 +145,7 @@ class _TrackPlaybackPositionContainerState
       duration: _reverseDuration,
       curve: Curves.fastLinearToSlowEaseIn,
     );
+    _playbackPositionController.reset();
     _playbackPositionController
       ..duration = state.track == null
           ? Duration.zero
