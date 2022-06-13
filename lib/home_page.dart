@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:developer';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
@@ -10,6 +9,8 @@ import 'package:spotix/content_provider.dart';
 import 'package:spotix/content_section.dart';
 import 'package:spotix/di.dart';
 import 'package:spotix/home_sliver_app_bar.dart';
+import 'package:spotix/listeners/auth_state_listener.dart';
+import 'package:spotix/listeners/connection_state_listener.dart';
 import 'package:spotix/track_player_container.dart';
 
 class HomePage extends StatefulWidget {
@@ -20,7 +21,10 @@ class HomePage extends StatefulWidget {
 }
 
 class _HomePageState extends State<HomePage> {
-  StreamSubscription<String?>? _authTokenListener;
+  late final AuthStateListener _authStateListener;
+  late final ConnectionStateListener _connectionStateListener;
+
+  StreamSubscription<SpotifyAuthorizationState>? _authStateListenerSubscriber;
 
   @override
   Widget build(BuildContext context) {
@@ -81,12 +85,14 @@ class _HomePageState extends State<HomePage> {
   @override
   void initState() {
     super.initState();
+    _authStateListener = getIt<AuthStateListener>();
+    _connectionStateListener = getIt<ConnectionStateListener>();
     _checkSpotifyApp();
   }
 
   @override
   void dispose() {
-    _authTokenListener?.cancel();
+    _authStateListenerSubscriber?.cancel();
     getIt<SpotifyClient>().disconnect();
     super.dispose();
   }
@@ -121,31 +127,19 @@ class _HomePageState extends State<HomePage> {
   }
 
   void _initAuthListener() {
-    _authTokenListener = getIt<SpotifyClient>().onAuthTokenChanged.listen(
-      _onAuthTokenChanged,
-      onError: (Object error, StackTrace stackTrace) {
-        log(
-          'An error occurred while listening to SpotifyClient.onAuthStateChanged',
-          name: '_HomePageState._initAuthListener',
-          error: error,
-          stackTrace: stackTrace,
-        );
-      },
-    );
-    
+    _authStateListenerSubscriber =
+        _authStateListener.onChanged.listen(_onAuthStateChanged);
   }
 
   void _requestAuthorization() {
     getIt<SpotifyClient>().requestAuthorization();
   }
 
-  void _onAuthTokenChanged(String? authToken) {
-    if (authToken != null) {
+  void _onAuthStateChanged(SpotifyAuthorizationState authState) {
+    final bool isDisconnected = _connectionStateListener.currentValue ==
+        SpotifyConnectionState.disconnected;
+    if (authState.status == AuthStatus.authorized && isDisconnected) {
       getIt<SpotifyClient>().connect();
-    } else {
-      getIt<SpotifyClient>().disconnect();
     }
   }
-
-
 }

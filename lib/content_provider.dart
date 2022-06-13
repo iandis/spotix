@@ -3,15 +3,22 @@ import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:spotify_client/spotify_client.dart';
 import 'package:spotix/cached_image_bytes_manager.dart';
+import 'package:spotix/listeners/connection_state_listener.dart';
 
 enum ContentState { init, loading, loaded }
 
-const SpotifyClient _spotifyClient = SpotifyClient();
-
 class ContentProvider extends ChangeNotifier {
-  ContentProvider(this._cachedImageBytesManager);
+  ContentProvider(
+    this._cachedImageBytesManager,
+    this._connectionStateListener,
+    this._spotifyClient,
+  );
 
   final CachedImageBytesManager _cachedImageBytesManager;
+
+  final ConnectionStateListener _connectionStateListener;
+
+  final SpotifyClient _spotifyClient;
 
   ContentState _sectionState = ContentState.init;
   ContentState get sectionState => _sectionState;
@@ -26,7 +33,7 @@ class ContentProvider extends ChangeNotifier {
   List<ContentState> get sectionItemListState => _sectionItemListState;
 
   Future<void> refreshSections() async {
-    final bool isConnected = await _spotifyClient.currentConnectionState ==
+    final bool isConnected = _connectionStateListener.currentValue ==
         SpotifyConnectionState.connected;
     if (_sectionState == ContentState.loading || !isConnected) return;
 
