@@ -1,14 +1,18 @@
 import 'dart:typed_data';
 
 import 'package:flutter/foundation.dart';
-import 'package:quiver/collection.dart';
 import 'package:spotify_client/spotify_client.dart';
+import 'package:spotix/cached_image_bytes_manager.dart';
 
 enum ContentState { init, loading, loaded }
 
 const SpotifyClient _spotifyClient = SpotifyClient();
 
 class ContentProvider extends ChangeNotifier {
+  ContentProvider(this._cachedImageBytesManager);
+
+  final CachedImageBytesManager _cachedImageBytesManager;
+
   ContentState _sectionState = ContentState.init;
   ContentState get sectionState => _sectionState;
 
@@ -79,12 +83,12 @@ class ContentProvider extends ChangeNotifier {
     notifyListeners();
   }
 
-  final Map<String, Future<Uint8List?>> _cachedImageBytes =
-      LruMap<String, Future<Uint8List?>>(maximumSize: 100);
-
   Future<Uint8List?> getImageBytes(String imageUri) {
-    return _cachedImageBytes[imageUri] ??=
-        _spotifyClient.getImage(imageUri: imageUri);
+    _cachedImageBytesManager.put(
+      imageUri,
+      _spotifyClient.getImage(imageUri: imageUri),
+    );
+    return _cachedImageBytesManager.get(imageUri);
   }
 
   void clearItems() {
