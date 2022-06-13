@@ -1,3 +1,6 @@
+# 0.0.5
+* Fix `Unauthorized` state not resetting all state
+
 ## 0.0.4
 * Add spotify player playback position field
 * Remove unused methods
