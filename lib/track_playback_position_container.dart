@@ -60,7 +60,7 @@ class _TrackPlaybackPositionContainerState
                   child: Center(
                     child: Text(
                       currentPositionTime.inTime,
-                      style: AppTextStyles.hint,
+                      style: AppTextStyles.caption,
                     ),
                   ),
                 ),
