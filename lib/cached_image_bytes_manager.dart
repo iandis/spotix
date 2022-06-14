@@ -4,21 +4,16 @@ import 'package:quiver/collection.dart';
 
 class CachedImageBytesManager {
   final Map<String, Future<Uint8List?>> _cachedImageBytes =
-      LruMap<String, Future<Uint8List?>>(maximumSize: 100);
+      LruMap<String, Future<Uint8List?>>();
 
-  Future<Uint8List?> get(String key) {
-    final Future<Uint8List?>? cached = _cachedImageBytes[key];
-    assert(
-      cached != null,
-      'Cached image bytes not found! Make sure to call `CachedImageBytesManager.put` before trying to get the cached image bytes.',
-    );
-    return cached!;
+  Future<Uint8List?>? get(String key) {
+    return _cachedImageBytes[key];
   }
 
-  void put(
+  Future<Uint8List?> put(
     String key,
     Future<Uint8List?> imageBytesFuture,
   ) {
-    _cachedImageBytes[key] ??= imageBytesFuture;
+    return _cachedImageBytes[key] ??= imageBytesFuture;
   }
 }

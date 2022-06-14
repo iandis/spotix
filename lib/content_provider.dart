@@ -91,11 +91,11 @@ class ContentProvider extends ChangeNotifier {
   }
 
   Future<Uint8List?> getImageBytes(String imageUri) {
-    _cachedImageBytesManager.put(
-      imageUri,
-      _spotifyClient.getImage(imageUri: imageUri),
-    );
-    return _cachedImageBytesManager.get(imageUri);
+    return _cachedImageBytesManager.get(imageUri) ??
+        _cachedImageBytesManager.put(
+          imageUri,
+          _spotifyClient.getImage(imageUri: imageUri),
+        );
   }
 
   void clearItems() {
